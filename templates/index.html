@@ -5,70 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calculadora de Alquiler</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f4f4;
-            color: #333;
-        }
-        .container {
-            max-width: 600px;
-            margin: 30px auto;
-            background-color: #fff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            color: #0056b3;
-            text-align: center;
-            margin-bottom: 25px;
-        }
-        form label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-        }
-        form input[type="number"], 
-        form select {
-            width: calc(100% - 22px);
-            padding: 10px;
-            margin-bottom: 15px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        form button {
-            background-color: #007bff;
-            color: white;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            width: 100%;
-            transition: background-color 0.3s ease;
-        }
-        form button:hover {
-            background-color: #0056b3;
-        }
-        .resultado {
-            margin-top: 25px;
-            padding: 15px;
-            background-color: #e9ecef;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            font-size: 1.2em;
-            font-weight: bold;
-            text-align: center;
-            color: #0056b3;
-        }
-        .warning {
-            color: #dc3545;
-            font-weight: bold;
-            text-align: center;
-            margin-top: 15px;
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 600px; margin: 30px auto; background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
+        h1 { color: #0056b3; text-align: center; margin-bottom: 25px; }
+        form label { display: block; margin-bottom: 8px; font-weight: bold; }
+        form input[type="number"], form select { width: calc(100% - 22px); padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        form button { background-color: #007bff; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; width: 100%; transition: background-color 0.3s ease; }
+        form button:hover { background-color: #0056b3; }
+        .resultado { margin-top: 25px; padding: 15px; background-color: #e9ecef; border: 1px solid #ced4da; border-radius: 4px; font-size: 1.2em; font-weight: bold; text-align: center; color: #0056b3; }
+        .warning { color: #dc3545; font-weight: bold; text-align: center; margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -78,36 +23,53 @@
         
         <form method="POST">
             <label for="m2_total">M2 Totales:</label>
-            <input type="number" id="m2_total" name="m2_total" required min="1" value="50">
+            <input type="number" id="m2_total" name="m2_total" required min="1" 
+                   value="{{ form_data.get('m2_total') | escape }}">
 
             <label for="m2_cubierta">M2 Cubiertos:</label>
-            <input type="number" id="m2_cubierta" name="m2_cubierta" required min="1" value="45">
+            <input type="number" id="m2_cubierta" name="m2_cubierta" required min="1" 
+                   value="{{ form_data.get('m2_cubierta') | escape }}">
 
             <label for="ambientes">Ambientes:</label>
-            <input type="number" id="ambientes" name="ambientes" required min="1" value="2">
+            <input type="number" id="ambientes" name="ambientes" required min="1" 
+                   value="{{ form_data.get('ambientes') | escape }}">
 
             <label for="dormitorios">Dormitorios:</label>
-            <input type="number" id="dormitorios" name="dormitorios" required min="0" value="1">
+            <input type="number" id="dormitorios" name="dormitorios" required min="0" 
+                   value="{{ form_data.get('dormitorios') | escape }}">
 
             <label for="banos">Baños:</label>
-            <input type="number" id="banos" name="banos" required min="0" value="1">
+            <input type="number" id="banos" name="banos" required min="0" 
+                   value="{{ form_data.get('banos') | escape }}">
 
             <label for="cocheras">Cocheras:</label>
-            <input type="number" id="cocheras" name="cocheras" required min="0" value="0">
+            <input type="number" id="cocheras" name="cocheras" required min="0" 
+                   value="{{ form_data.get('cocheras') | escape }}">
 
             <label for="antiguedad">Antigüedad (años):</label>
-            <input type="number" id="antiguedad" name="antiguedad" required min="0" value="10">
+            <input type="number" id="antiguedad" name="antiguedad" required min="0" 
+                   value="{{ form_data.get('antiguedad') | escape }}">
 
             <label for="expensas_ars">Expensas (en ARS):</label>
-            <input type="number" id="expensas_ars" name="expensas_ars" required min="0" value="50000">
+            <input type="number" id="expensas_ars" name="expensas_ars" required min="0" 
+                   value="{{ form_data.get('expensas_ars') | escape }}">
 
             <label for="barrio">Barrio:</label>
             <select id="barrio" name="barrio" required>
                 {% for b in barrios %}
-                    <option value="{{ b }}" {% if b == 'Palermo' %}selected{% endif %}>{{ b }}</option>
+                    <option value="{{ b }}" 
+                            {% if form_data.get('barrio') == b %}selected{% endif %}>
+                        {{ b }}
+                    </option>
                 {% endfor %}
             </select>
             
+            <label for="tiene_amenities">¿Tiene Amenities (SUM, Piscina, etc.)?</label>
+            <select id="tiene_amenities" name="tiene_amenities" required>
+                <option value="1" {% if form_data.get('tiene_amenities') == '1' %}selected{% endif %}>Sí</option>
+                <option value="0" {% if form_data.get('tiene_amenities') == '0' %}selected{% endif %}>No</option>
+            </select>
+
             <button type="submit">Calcular Alquiler</button>
         </form>
 
