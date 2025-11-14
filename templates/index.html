@@ -13,19 +13,15 @@
         form button { background-color: #007bff; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; width: 100%; transition: background-color 0.3s ease; }
         form button:hover { background-color: #0056b3; }
         .resultado { margin-top: 25px; padding: 15px; background-color: #e9ecef; border: 1px solid #ced4da; border-radius: 4px; font-size: 1.2em; font-weight: bold; text-align: center; color: #0056b3; }
-        .warning { color: #dc3545; font-weight: bold; text-align: center; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Calculadora de Alquiler de Departamentos</h1>
-        <p>Introduce las características de tu departamento para obtener una estimación de su valor de alquiler.</p>
+        <h1>Calculadora de Alquiler (Modelo Combinado)</h1>
+        <p>Introduce las características de tu departamento para obtener una estimación.</p>
         
         <form method="POST">
-            <label for="m2_total">M2 Totales:</label>
-            <input type="number" id="m2_total" name="m2_total" required min="1" 
-                   value="{{ form_data.get('m2_total') | escape }}">
-
+            
             <label for="m2_cubierta">M2 Cubiertos:</label>
             <input type="number" id="m2_cubierta" name="m2_cubierta" required min="1" 
                    value="{{ form_data.get('m2_cubierta') | escape }}">
@@ -41,10 +37,6 @@
             <label for="banos">Baños:</label>
             <input type="number" id="banos" name="banos" required min="0" 
                    value="{{ form_data.get('banos') | escape }}">
-
-            <label for="cocheras">Cocheras:</label>
-            <input type="number" id="cocheras" name="cocheras" required min="0" 
-                   value="{{ form_data.get('cocheras') | escape }}">
 
             <label for="antiguedad">Antigüedad (años):</label>
             <input type="number" id="antiguedad" name="antiguedad" required min="0" 
@@ -64,12 +56,6 @@
                 {% endfor %}
             </select>
             
-            <label for="tiene_amenities">¿Tiene Amenities (SUM, Piscina, etc.)?</label>
-            <select id="tiene_amenities" name="tiene_amenities" required>
-                <option value="1" {% if form_data.get('tiene_amenities') == '1' %}selected{% endif %}>Sí</option>
-                <option value="0" {% if form_data.get('tiene_amenities') == '0' %}selected{% endif %}>No</option>
-            </select>
-
             <button type="submit">Calcular Alquiler</button>
         </form>
 
@@ -77,10 +63,7 @@
             <div class="resultado">
                 Estimación de Alquiler: {{ prediccion }}
             </div>
-            {% if "Error" in prediccion %}
-                <p class="warning">Asegúrate de que el modelo esté entrenado y los datos sean válidos.</p>
-            {% endif %}
         {% endif %}
     </div>
 </body>
-</html>
+</html> 

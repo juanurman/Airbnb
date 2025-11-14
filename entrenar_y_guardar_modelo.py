@@ -7,75 +7,158 @@ from sklearn.compose import make_column_transformer
 from sklearn.pipeline import make_pipeline
 from sklearn.metrics import r2_score
 import joblib 
+import os
 
 # --- CONFIGURACIÓN INICIAL ---
 TASA_CAMBIO_DOLAR = 1430 
+ARCHIV_REMAX = 'propiedades_remax_DETALLADO_COMPLETO.xlsx'
+ARCHIV_ARGENPROP = 'propiedades_argenprop_FINAL_COMPLETO.xlsx' # <-- Tu nuevo archivo
 
-# 1. --- FUNCIÓN DE CARGA Y LIMPIEZA PROFUNDA ---
-def cargar_y_limpiar_datos(archivo_excel):
-    print(f"Cargando datos desde {archivo_excel}...")
-    try:
-        df = pd.read_excel(archivo_excel)
-    except FileNotFoundError:
-        print(f"*** ERROR: No se encontró el archivo '{archivo_excel}' ***")
-        return None
-    except Exception as e:
-        print(f"*** ERROR al cargar el archivo: {e} ***")
-        return None
+# Columnas comunes que usaremos para el modelo
+COLUMNAS_FINALES = [
+    'Barrio',
+    'Precio_ARS',
+    'Expensas_ARS',
+    'M2_cubierta',
+    'Ambientes',
+    'Dormitorios',
+    'Baños',
+    'Antiguedad'
+]
 
-    def limpiar_moneda(texto):
-        texto = str(texto).lower()
-        if "no dispor" in texto or "consultar" in texto:
-            return None
-        
+# --- FUNCIONES DE LIMPIEZA SEPARADAS ---
+
+def limpiar_moneda(texto, tasa_dolar, es_remax=True):
+    """Limpia la columna de precio para CUALQUIER formato"""
+    texto = str(texto).lower()
+    if "no dispor" in texto or "consultar" in texto:
+        return None
+    
+    # Extraer números (ignorando puntos de miles)
+    # Quitar $ y .
+    valor_str = re.sub(r'[$\.]', '', texto.split(' ')[-1])
+    
+    # Lógica para Argenprop/Remax (USD 550 vs $ 850.000)
+    if es_remax:
         numeros = re.findall(r'[\d\.]+', texto)
-        if not numeros:
-            return None
-        
+        if not numeros: return None
         valor_str = "".join(numeros).replace('.', '')
-        valor = pd.to_numeric(valor_str, errors='coerce')
+    else: # Lógica Argenprop
+        match = re.search(r'([\d\.]+)', texto.replace('.', ''))
+        if not match: return None
+        valor_str = match.group(1)
+
+    valor = pd.to_numeric(valor_str, errors='coerce')
+    if pd.isna(valor): return None
         
-        if pd.isna(valor):
-            return None
-            
-        if "usd" in texto:
-            return valor * TASA_CAMBIO_DOLAR
-        else:
-            return valor
+    if "usd" in texto:
+        return valor * tasa_dolar
+    else:
+        return valor
 
-    print("Limpiando y unificando 'Precio' y 'Expensas' a ARS...")
-    df['Precio_ARS'] = df['Precio'].apply(limpiar_moneda)
-    df['Expensas_ARS'] = df['Expensas'].apply(limpiar_moneda)
-    df['Expensas_ARS'] = df['Expensas_ARS'].fillna(0)
+def limpiar_expensas(texto):
+    """Limpia expensas de CUALQUIER formato"""
+    texto = str(texto).lower()
+    if "no disponible" in texto or "+" in texto: # Argenprop a veces solo pone "+"
+        return 0
     
-    print("Limpiando features numéricos (M2, Ambientes, etc.)...")
-    columnas_numericas = ['M2 total', 'M2 cubierta', 'M2 descubierta', 
-                          'Ambientes', 'Dormitorios', 'Baños', 
-                          'Cocheras', 'Antiguedad']
+    # Quitar puntos
+    texto_limpio = texto.replace('.', '')
     
-    for col in columnas_numericas:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+    # Extraer solo el número
+    match = re.search(r'([\d\.]+)', texto_limpio)
+    if match:
+        return pd.to_numeric(match.group(1), errors='coerce')
+    return 0
 
-    df['Barrio'] = df['Barrio'].replace('No dispor', None)
+
+def cargar_y_limpiar_datos(archivo_remax, archivo_argenprop):
+    print("Cargando y limpiando datos...")
+    dataframes_limpios = []
+
+    # --- 1. PROCESAR REMAX ---
+    if os.path.exists(archivo_remax):
+        print(f"Cargando Remax: {archivo_remax}")
+        df_remax = pd.read_excel(archivo_remax)
+        
+        # Limpieza de Moneda
+        df_remax['Precio_ARS'] = df_remax['Precio'].apply(lambda x: limpiar_moneda(x, TASA_CAMBIO_DOLAR, es_remax=True))
+        df_remax['Expensas_ARS'] = df_remax['Expensas'].apply(limpiar_expensas)
+        
+        # Limpieza de Numéricos
+        cols_numericas_remax = ['M2 cubierta', 'Ambientes', 'Dormitorios', 'Baños', 'Cocheras', 'Antiguedad']
+        for col in cols_numericas_remax:
+            df_remax[col] = pd.to_numeric(df_remax[col], errors='coerce')
+        
+        # Renombrar para consistencia
+        df_remax = df_remax.rename(columns={'M2 cubierta': 'M2_cubierta'})
+        
+        # Seleccionar solo las columnas que nos importan
+        # NOTA: Remax no tiene "M2 total" ni "Cocheras" en esta versión
+        columnas_remax = [
+            'Barrio', 'Precio_ARS', 'Expensas_ARS', 'M2_cubierta', 'Ambientes',
+            'Dormitorios', 'Baños', 'Antiguedad'
+        ]
+        df_remax_final = df_remax[columnas_remax].copy()
+        dataframes_limpios.append(df_remax_final)
+        print(f"Remax procesado: {len(df_remax_final)} filas.")
+    else:
+        print(f"Advertencia: No se encontró el archivo {archivo_remax}")
+
+    # --- 2. PROCESAR ARGENPROP ---
+    if os.path.exists(archivo_argenprop):
+        print(f"Cargando Argenprop: {archivo_argenprop}")
+        df_argen = pd.read_excel(archivo_argenprop)
+        
+        # Limpieza de Moneda
+        df_argen['Precio_ARS'] = df_argen['Precio'].apply(lambda x: limpiar_moneda(x, TASA_CAMBIO_DOLAR, es_remax=False))
+        df_argen['Expensas_ARS'] = df_argen['Expensas'].apply(limpiar_expensas)
+
+        # Renombrar para consistencia
+        df_argen = df_argen.rename(columns={'M2 cubierta': 'M2_cubierta'})
+
+        # Limpieza de Numéricos
+        cols_numericas_argen = ['M2_cubierta', 'Ambientes', 'Dormitorios', 'Baños', 'Antiguedad']
+        for col in cols_numericas_argen:
+            df_argen[col] = pd.to_numeric(df_argen[col], errors='coerce')
+
+        # Seleccionar solo las columnas que nos importan
+        columnas_argen = [
+            'Barrio', 'Precio_ARS', 'Expensas_ARS', 'M2_cubierta', 'Ambientes',
+            'Dormitorios', 'Baños', 'Antiguedad'
+        ]
+        df_argen_final = df_argen[columnas_argen].copy()
+        dataframes_limpios.append(df_argen_final)
+        print(f"Argenprop procesado: {len(df_argen_final)} filas.")
+    else:
+        print(f"Advertencia: No se encontró el archivo {archivo_argenprop}")
+
+    # --- 3. COMBINAR DATAFRAMES ---
+    if not dataframes_limpios:
+        print("¡Error! No se pudo cargar ningún archivo de datos.")
+        return None
+        
+    df_combinado = pd.concat(dataframes_limpios, ignore_index=True)
     
-    df = df.dropna(subset=['Precio_ARS', 'Barrio', 'M2 total'])
+    # --- 4. LIMPIEZA FINAL COMBINADA ---
+    # Eliminar filas donde falten datos esenciales
+    df_combinado = df_combinado.dropna(subset=['Precio_ARS', 'Barrio', 'M2_cubierta', 'Ambientes'])
     
     # Filtro de Outliers (Valores Atípicos)
-    limite_precio = df['Precio_ARS'].quantile(0.99)
-    print(f"Filtrando precios... Límite de precio (percentil 99): $ {limite_precio:,.0f} ARS")
-    df = df[df['Precio_ARS'] <= limite_precio]
+    limite_precio = df_combinado['Precio_ARS'].quantile(0.99)
+    limite_m2 = df_combinado['M2_cubierta'].quantile(0.99)
     
-    # **************************************************
-    # ** ¡¡¡NUEVA LÍNEA AQUÍ!!! **
-    # **************************************************
-    # Crear la bandera (flag) de Amenities
-    # Será 0 si no tiene, 1 si tiene (basado en si pudimos scrapear la lista)
-    print("Creando nueva feature 'Tiene_Amenities_Flag'...")
-    df['Tiene_Amenities_Flag'] = df['Amenities'].apply(lambda x: 0 if pd.isna(x) or 'No disponible' in str(x) or 'ID NO CONFIGURADO' in str(x) else 1)
-    # **************************************************
+    print(f"Filtrando outliers... Límite de precio: ${limite_precio:,.0f} | Límite M2: {limite_m2} m²")
+    df_combinado = df_combinado[
+        (df_combinado['Precio_ARS'] <= limite_precio) &
+        (df_combinado['M2_cubierta'] <= limite_m2)
+    ]
     
-    print(f"Limpieza completa. Quedan {len(df)} propiedades válidas para entrenar.")
-    return df
+    # Rellenar con 0 el resto de campos (Cocheras, Antiguedad, etc. si faltan)
+    df_combinado = df_combinado.fillna(0)
+
+    print(f"Limpieza completa. Total de {len(df_combinado)} propiedades válidas para entrenar.")
+    return df_combinado
 
 # 2. --- FUNCIÓN DE ENTRENAMIENTO DEL MODELO ---
 def entrenar_modelo(df):
@@ -83,20 +166,13 @@ def entrenar_modelo(df):
     
     y = df['Precio_ARS']
     
-    # **************************************************
-    # ** ¡¡¡CAMBIO AQUÍ!!! **
-    # **************************************************
+    # Usamos las columnas comunes (sin M2 total, Cocheras, ni Amenities)
     features_numericos = [
-        'M2 total', 'M2 cubierta', 'Ambientes', 
-        'Dormitorios', 'Baños', 'Cocheras', 
-        'Antiguedad', 'Expensas_ARS', 
-        'Tiene_Amenities_Flag' # <-- AÑADIDO
+        'M2_cubierta', 'Ambientes', 'Dormitorios', 
+        'Baños', 'Antiguedad', 'Expensas_ARS'
     ]
-    # **************************************************
-    
     features_categoricos = ['Barrio']
     
-    df[features_numericos] = df[features_numericos].fillna(0)
     X = df[features_numericos + features_categoricos]
 
     column_transformer = make_column_transformer(
@@ -122,11 +198,9 @@ def entrenar_modelo(df):
 # --- EJECUCIÓN PRINCIPAL PARA ENTRENAR Y GUARDAR ---
 if __name__ == "__main__":
     
-    print("--- INICIANDO SCRIPT DE ENTRENAMIENTO ---")
+    print("--- INICIANDO SCRIPT DE ENTRENAMIENTO COMBINADO (Remax + Argenprop) ---")
     
-    nombre_del_archivo = 'propiedades_remax_DETALLADO_COMPLETO.xlsx'
-    
-    df_limpio = cargar_y_limpiar_datos(nombre_del_archivo)
+    df_limpio = cargar_y_limpiar_datos(ARCHIV_REMAX, ARCHIV_ARGENPROP)
     
     if df_limpio is None or len(df_limpio) < 50:
         print("\n*** ADVERTENCIA: No hay suficientes datos (menos de 50) para un modelo confiable. ***")
@@ -137,6 +211,7 @@ if __name__ == "__main__":
         try:
             joblib.dump(modelo_entrenado, 'modelo_alquiler.pkl')
             print("\n--- ¡ÉXITO! Modelo guardado como 'modelo_alquiler.pkl' ---")
-            print("Ya puedes ejecutar 'app.py' para iniciar la calculadora web.")
+            print("El modelo ahora está entrenado con AMBOS datasets.")
+            print("Ya puedes ejecutar 'app.py' para iniciar la calculadora web (¡recuerda actualizarlo!).")
         except Exception as e:
             print(f"\n*** ERROR AL GUARDAR EL MODELO: {e} ***")
